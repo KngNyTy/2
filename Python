@@ -1,0 +1,141 @@
+from flask import Flask, render_template_string, request, session, redirect, url_for, flash
+
+app = Flask(__name__)
+app.secret_key = 'super_secret_key'  # Needed for session
+
+# Hardcoded products (id, name, price)
+products = [
+    {'id': 1, 'name': 'Laptop', 'price': 999.99},
+    {'id': 2, 'name': 'Smartphone', 'price': 499.99},
+    {'id': 3, 'name': 'Headphones', 'price': 79.99},
+    {'id': 4, 'name': 'Mouse', 'price': 25.99},
+]
+
+# HTML Templates (using render_template_string for single-file simplicity)
+
+HOME_TEMPLATE = '''
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Simple Online Store</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .product { border: 1px solid #ccc; padding: 20px; margin: 20px 0; }
+        .cart-link { position: absolute; top: 20px; right: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Welcome to Our Online Store</h1>
+    <a href="{{ url_for('cart') }}" class="cart-link">View Cart ({{ cart_item_count }})</a>
+    <div>
+        {% for product in products %}
+        <div class="product">
+            <h2>{{ product.name }}</h2>
+            <p>Price: ${{ "%.2f" % product.price }}</p>
+            <form action="{{ url_for('add_to_cart', product_id=product.id) }}" method="post">
+                <input type="submit" value="Add to Cart">
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
+'''
+
+CART_TEMPLATE = '''
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Shopping Cart</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>Your Shopping Cart</h1>
+    <a href="{{ url_for('home') }}">Continue Shopping</a>
+    {% if cart %}
+    <table>
+        <tr>
+            <th>Product</th>
+            <th>Price</th>
+            <th>Quantity</th>
+            <th>Subtotal</th>
+            <th>Action</th>
+        </tr>
+        {% for item in cart %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>${{ "%.2f" % item.price }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>${{ "%.2f" % (item.price * item.quantity) }}</td>
+            <td>
+                <form action="{{ url_for('remove_from_cart', product_id=item.id) }}" method="post">
+                    <input type="submit" value="Remove">
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="3"><strong>Total</strong></td>
+            <td><strong>${{ "%.2f" % total }}</strong></td>
+            <td></td>
+        </tr>
+    </table>
+    {% else %}
+    <p>Your cart is empty.</p>
+    {% endif %}
+</body>
+</html>
+'''
+
+@app.route('/')
+def home():
+    cart = session.get('cart', {})
+    cart_item_count = sum(cart.values())
+    return render_template_string(HOME_TEMPLATE, products=products, cart_item_count=cart_item_count)
+
+@app.route('/add/<int:product_id>', methods=['POST'])
+def add_to_cart(product_id):
+    product = next((p for p in products if p['id'] == product_id), None)
+    if product:
+        cart = session.get('cart', {})
+        cart[str(product_id)] = cart.get(str(product_id), 0) + 1
+        session['cart'] = cart
+        flash(f"{product['name']} added to cart!")
+    return redirect(url_for('home'))
+
+@app.route('/remove/<int:product_id>', methods=['POST'])
+def remove_from_cart(product_id):
+    cart = session.get('cart', {})
+    if str(product_id) in cart:
+        cart[str(product_id)] -= 1
+        if cart[str(product_id)] <= 0:
+            del cart[str(product_id)]
+        session['cart'] = cart
+    return redirect(url_for('cart'))
+
+@app.route('/cart')
+def cart():
+    cart_dict = session.get('cart', {})
+    cart_items = []
+    total = 0
+    for pid, qty in cart_dict.items():
+        product = next((p for p in products if p['id'] == int(pid)), None)
+        if product:
+            subtotal = product['price'] * qty
+            total += subtotal
+            cart_items.append({
+                'id': product['id'],
+                'name': product['name'],
+                'price': product['price'],
+                'quantity': qty
+            })
+    return render_template_string(CART_TEMPLATE, cart=cart_items, total=total)
+
+if __name__ == '__main__':
+    app.run(debug=True)
