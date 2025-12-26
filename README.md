@@ -1,3 +1,5 @@
+@@ -1 +1,4 @@
+# 2
 1. Save the code as app.py.
 2. Run python app.py.
 3. Open your browser and go to http://127.0.0.1:5000/.
